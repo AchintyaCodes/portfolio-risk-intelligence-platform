@@ -73,3 +73,50 @@ def analyze_portfolio(
         "sharpe_ratio": round(sharpe_ratio, 2),
         "value_at_risk": round(var_95 * 100, 2),
     }
+
+    @app.get("/monte-carlo")
+def monte_carlo_simulation(
+    tickers: str = Query(...),
+    weights: str = Query(...)
+):
+    ticker_list = tickers.split(",")
+    weight_list = np.array(
+        [float(w) / 100 for w in weights.split(",")]
+    )
+
+    data = yf.download(
+        ticker_list,
+        period="1y",
+        auto_adjust=True
+    )["Close"]
+
+    returns = data.pct_change().dropna()
+
+    portfolio_returns = returns.dot(weight_list)
+
+    mean_return = portfolio_returns.mean()
+    std_dev = portfolio_returns.std()
+
+    simulations = 100
+    days = 252
+
+    simulation_results = []
+
+    for _ in range(simulations):
+        prices = [10000]
+
+        for _ in range(days):
+            simulated_return = np.random.normal(
+                mean_return,
+                std_dev
+            )
+
+            prices.append(
+                prices[-1] * (1 + simulated_return)
+            )
+
+        simulation_results.append(prices)
+
+    return {
+        "simulations": simulation_results
+    }

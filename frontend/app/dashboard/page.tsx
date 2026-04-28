@@ -12,6 +12,7 @@ import {
   PieChart,
   Pie,
   Cell,
+  CartesianGrid,
 } from "recharts";
 
 const performanceData = [
@@ -42,22 +43,37 @@ export default function Dashboard() {
 
   const [tickers, setTickers] = useState("AAPL,TSLA,MSFT,NVDA");
   const [weights, setWeights] = useState("35,25,20,20");
+  const [monteCarloData, setMonteCarloData] = useState<number[][]>([]);
 
-  const fetchPortfolioData = () => {
-    axios
-      .get("http://127.0.0.1:8000/portfolio", {
-        params: {
-          tickers,
-          weights,
-        },
-      })
-      .then((response) => {
-        setPortfolioMetrics(response.data);
-      })
-      .catch((error) => {
-        console.error("Error fetching portfolio data:", error);
-      });
-  };
+const fetchPortfolioData = () => {
+  axios
+    .get("http://127.0.0.1:8000/portfolio", {
+      params: {
+        tickers,
+        weights,
+      },
+    })
+    .then((response) => {
+      setPortfolioMetrics(response.data);
+    })
+    .catch((error) => {
+      console.error("Error fetching portfolio data:", error);
+    });
+
+  axios
+    .get("http://127.0.0.1:8000/monte-carlo", {
+      params: {
+        tickers,
+        weights,
+      },
+    })
+    .then((response) => {
+      setMonteCarloData(response.data.simulations);
+    })
+    .catch((error) => {
+      console.error("Error fetching Monte Carlo data:", error);
+    });
+};
 
   useEffect(() => {
     fetchPortfolioData();
@@ -196,6 +212,37 @@ export default function Dashboard() {
           </div>
         </div>
       </section>
+
+      <section className="bg-white/5 border border-white/10 rounded-3xl p-8 backdrop-blur-xl shadow-xl mb-12">
+  <h2 className="text-3xl font-semibold mb-8">
+    Monte Carlo Forecast Simulation
+  </h2>
+
+  <div className="h-[500px] bg-black/30 rounded-3xl p-6 border border-white/10 overflow-auto">
+    <ResponsiveContainer width="100%" height="100%">
+<LineChart>
+  {monteCarloData.map((simulation, index) => (
+    <Line
+      key={index}
+      data={simulation.map((value, day) => ({
+        day,
+        value,
+      }))}
+      dataKey="value"
+      dot={false}
+      stroke="rgba(255,255,255,0.08)"
+      strokeWidth={1}
+    />
+  ))}
+
+  <CartesianGrid strokeDasharray="3 3" stroke="#222" />
+  <XAxis dataKey="day" stroke="#888" />
+  <YAxis stroke="#888" />
+  <Tooltip />
+</LineChart>
+    </ResponsiveContainer>
+  </div>
+</section>
 
       {/* AI Insights */}
       <section className="bg-white/5 border border-white/10 rounded-3xl p-8 backdrop-blur-xl shadow-xl">
