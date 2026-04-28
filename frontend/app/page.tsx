@@ -3,7 +3,7 @@
 import { motion, useScroll, useTransform } from "framer-motion";
 import Link from "next/link";
 import { useRef, useState, useEffect } from "react";
-import { TrendingUp, Shield, Zap, BarChart2, Activity, Target } from "lucide-react";
+import { TrendingUp, Shield, Zap, BarChart2, Activity, Target, GitBranch, Clock, AlertTriangle } from "lucide-react";
 
 function AnimatedCounter({ end, suffix = "", duration = 2000 }: { end: number; suffix?: string; duration?: number }) {
   const [count, setCount] = useState(0);
@@ -35,6 +35,9 @@ function AnimatedCounter({ end, suffix = "", duration = 2000 }: { end: number; s
 }
 
 const features = [
+  { icon: GitBranch, title: "Correlation Heatmap", desc: "Pairwise correlation matrix showing diversification opportunities across assets." },
+  { icon: Clock, title: "Historical Backtesting", desc: "1-year equity curve vs SPY with drawdown analysis and alpha calculation." },
+  { icon: AlertTriangle, title: "Stress Testing", desc: "6 historical crisis scenarios (2008, COVID, rate shocks) with simulated portfolio impact." },
   { icon: Activity, title: "Monte Carlo Simulations", desc: "200 simulated portfolio paths across 252 trading days with percentile breakdowns." },
   { icon: Target, title: "Efficient Frontier", desc: "MPT-based optimal risk/return curve with your portfolio plotted in real time." },
   { icon: Zap, title: "Portfolio Optimizer", desc: "Scipy max-Sharpe optimization with per-asset bounds and comparison charts." },

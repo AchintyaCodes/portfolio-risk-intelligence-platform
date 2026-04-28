@@ -8,7 +8,7 @@ import {
   PieChart, Pie, Cell, CartesianGrid, ScatterChart, Scatter,
   AreaChart, Area, RadarChart, Radar, PolarGrid, PolarAngleAxis,
 } from "recharts";
-import { TrendingUp, TrendingDown, Activity, Shield, Zap, Target, BarChart2, RefreshCw, Wifi, WifiOff } from "lucide-react";
+import { TrendingUp, TrendingDown, Activity, Shield, Zap, Target, BarChart2, RefreshCw, Wifi, WifiOff, GitBranch, Clock, AlertTriangle } from "lucide-react";
 
 const API = "http://127.0.0.1:8000";
 
@@ -30,6 +30,22 @@ interface OptimizeResult {
   expected_return: number; volatility: number; sharpe_ratio: number;
 }
 interface FrontierPoint { volatility: number; return: number; }
+interface CorrCell { x: string; y: string; value: number; }
+interface EquityPoint { date: string; portfolio: number; spy: number; }
+interface DrawdownPoint { date: string; drawdown: number; }
+interface BacktestResult {
+  equity_curve: EquityPoint[];
+  drawdown_curve: DrawdownPoint[];
+  total_return_portfolio: number;
+  total_return_spy: number;
+  alpha: number;
+}
+interface StressScenario {
+  scenario: string;
+  portfolio_impact: number;
+  worst_day: number;
+  path: number[];
+}
 
 // ── Demo data (shown when backend is offline) ─────────────────────
 const DEMO_METRICS: PortfolioMetrics = {
@@ -82,6 +98,44 @@ const DEMO_INSIGHTS = [
   "Portfolio annualized volatility of 22.1% is within an acceptable institutional range.",
   "Daily 95% VaR of -1.82% implies that on the worst 5% of trading days, losses could exceed this threshold on a $1M portfolio (≈$18,200).",
   "Portfolio is generating 4.20% alpha over SPY. Outperforming the benchmark.",
+];
+
+const DEMO_CORRELATION: CorrCell[] = [
+  { x: "AAPL", y: "AAPL", value: 1.0 }, { x: "TSLA", y: "AAPL", value: 0.42 }, { x: "MSFT", y: "AAPL", value: 0.78 }, { x: "NVDA", y: "AAPL", value: 0.61 },
+  { x: "AAPL", y: "TSLA", value: 0.42 }, { x: "TSLA", y: "TSLA", value: 1.0 }, { x: "MSFT", y: "TSLA", value: 0.38 }, { x: "NVDA", y: "TSLA", value: 0.51 },
+  { x: "AAPL", y: "MSFT", value: 0.78 }, { x: "TSLA", y: "MSFT", value: 0.38 }, { x: "MSFT", y: "MSFT", value: 1.0 }, { x: "NVDA", y: "MSFT", value: 0.69 },
+  { x: "AAPL", y: "NVDA", value: 0.61 }, { x: "TSLA", y: "NVDA", value: 0.51 }, { x: "MSFT", y: "NVDA", value: 0.69 }, { x: "NVDA", y: "NVDA", value: 1.0 },
+];
+
+function makeDemoBacktest(): BacktestResult {
+  const days = 252;
+  const equity: EquityPoint[] = [];
+  const drawdown: DrawdownPoint[] = [];
+  let portVal = 10000, spyVal = 10000, maxPort = 10000;
+  for (let i = 0; i < days; i++) {
+    portVal *= 1 + (Math.random() - 0.46) * 0.018;
+    spyVal *= 1 + (Math.random() - 0.48) * 0.012;
+    maxPort = Math.max(maxPort, portVal);
+    const dd = ((portVal - maxPort) / maxPort) * 100;
+    equity.push({ date: `2024-${String(Math.floor(i / 21) + 1).padStart(2, "0")}-${String((i % 21) + 1).padStart(2, "0")}`, portfolio: portVal, spy: spyVal });
+    drawdown.push({ date: equity[i].date, drawdown: dd });
+  }
+  return {
+    equity_curve: equity,
+    drawdown_curve: drawdown,
+    total_return_portfolio: ((portVal / 10000 - 1) * 100),
+    total_return_spy: ((spyVal / 10000 - 1) * 100),
+    alpha: ((portVal - spyVal) / 10000 * 100),
+  };
+}
+
+const DEMO_STRESS: StressScenario[] = [
+  { scenario: "2008 Financial Crisis", portfolio_impact: -38.2, worst_day: -9.4, path: Array.from({ length: 61 }, (_, i) => 10000 * (1 - 0.382 * (i / 60))) },
+  { scenario: "COVID Crash (Mar 2020)", portfolio_impact: -28.7, worst_day: -11.2, path: Array.from({ length: 61 }, (_, i) => 10000 * (1 - 0.287 * (i / 60))) },
+  { scenario: "2022 Rate Hike Selloff", portfolio_impact: -19.4, worst_day: -4.8, path: Array.from({ length: 61 }, (_, i) => 10000 * (1 - 0.194 * (i / 60))) },
+  { scenario: "Dot-com Bust (2000–02)", portfolio_impact: -42.1, worst_day: -8.1, path: Array.from({ length: 61 }, (_, i) => 10000 * (1 - 0.421 * (i / 60))) },
+  { scenario: "Flash Crash (May 2010)", portfolio_impact: -7.8, worst_day: -7.8, path: Array.from({ length: 61 }, (_, i) => 10000 * (1 - 0.078 * Math.min(1, i / 5))) },
+  { scenario: "+200bps Rate Shock", portfolio_impact: -12.3, worst_day: -3.2, path: Array.from({ length: 61 }, (_, i) => 10000 * (1 - 0.123 * (i / 60))) },
 ];
 
 // ── Animated counter ──────────────────────────────────────────────
@@ -186,13 +240,16 @@ export default function Dashboard() {
   const [weights, setWeights] = useState("35,25,20,20");
   const [loading, setLoading] = useState(false);
   const [isLive, setIsLive] = useState(false);
-  const [activeTab, setActiveTab] = useState<"overview" | "montecarlo" | "frontier" | "optimize" | "insights">("overview");
+  const [activeTab, setActiveTab] = useState<"overview" | "montecarlo" | "frontier" | "optimize" | "insights" | "correlation" | "backtest" | "stress">("overview");
 
   const [metrics, setMetrics] = useState<PortfolioMetrics>(DEMO_METRICS);
   const [monteCarlo, setMonteCarlo] = useState<MonteCarloResult>(() => makeDemoMC());
   const [optimized, setOptimized] = useState<OptimizeResult>(DEMO_OPTIMIZED);
   const [frontier, setFrontier] = useState<FrontierPoint[]>(DEMO_FRONTIER);
   const [insights, setInsights] = useState<string[]>(DEMO_INSIGHTS);
+  const [correlation, setCorrelation] = useState<CorrCell[]>(DEMO_CORRELATION);
+  const [backtest, setBacktest] = useState<BacktestResult>(() => makeDemoBacktest());
+  const [stress, setStress] = useState<StressScenario[]>(DEMO_STRESS);
   const [error, setError] = useState("");
 
   const fetchAll = useCallback(async () => {
@@ -200,18 +257,24 @@ export default function Dashboard() {
     setError("");
     try {
       const params = { tickers, weights };
-      const [metricsRes, mcRes, optRes, frontierRes, insightsRes] = await Promise.all([
+      const [metricsRes, mcRes, optRes, frontierRes, insightsRes, corrRes, backtestRes, stressRes] = await Promise.all([
         axios.get(`${API}/portfolio`, { params }),
         axios.get(`${API}/monte-carlo`, { params: { ...params, simulations: 200 } }),
         axios.get(`${API}/optimize`, { params: { tickers } }),
         axios.get(`${API}/efficient-frontier`, { params: { tickers } }),
         axios.get(`${API}/insights`, { params }),
+        axios.get(`${API}/correlation`, { params: { tickers } }),
+        axios.get(`${API}/backtest`, { params }),
+        axios.get(`${API}/stress-test`, { params }),
       ]);
       setMetrics(metricsRes.data);
       setMonteCarlo(mcRes.data);
       setOptimized(optRes.data);
       setFrontier(frontierRes.data.frontier);
       setInsights(insightsRes.data.insights);
+      setCorrelation(corrRes.data.cells);
+      setBacktest(backtestRes.data);
+      setStress(stressRes.data.scenarios);
       setIsLive(true);
     } catch {
       setError("Backend offline — showing demo data. Run: uvicorn main:app --reload in /backend");
@@ -246,6 +309,9 @@ export default function Dashboard() {
 
   const tabs = [
     { id: "overview", label: "Overview", icon: BarChart2 },
+    { id: "correlation", label: "Correlation", icon: GitBranch },
+    { id: "backtest", label: "Backtest", icon: Clock },
+    { id: "stress", label: "Stress Test", icon: AlertTriangle },
     { id: "montecarlo", label: "Monte Carlo", icon: Activity },
     { id: "frontier", label: "Efficient Frontier", icon: Target },
     { id: "optimize", label: "Optimizer", icon: Zap },
@@ -667,6 +733,164 @@ export default function Dashboard() {
                     </ResponsiveContainer>
                   </div>
                 </div>
+              </div>
+            )}
+
+            {/* ── CORRELATION HEATMAP ── */}
+            {activeTab === "correlation" && (
+              <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6">
+                <h2 className="text-sm font-semibold mb-0.5">Correlation Matrix</h2>
+                <p className="text-xs text-zinc-500 mb-6">Pairwise correlation between asset returns — key for diversification analysis</p>
+                <div className="grid gap-1" style={{ gridTemplateColumns: `repeat(${tickers.split(",").length}, minmax(0, 1fr))` }}>
+                  {correlation.map((cell, i) => {
+                    const intensity = Math.abs(cell.value);
+                    const bg = cell.value === 1 ? "#ffffff" : cell.value > 0 ? `rgba(255,255,255,${intensity * 0.6})` : `rgba(113,113,122,${intensity * 0.6})`;
+                    return (
+                      <motion.div
+                        key={i}
+                        initial={{ opacity: 0, scale: 0.8 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        transition={{ delay: i * 0.01 }}
+                        className="aspect-square flex items-center justify-center rounded-lg text-xs font-mono font-semibold"
+                        style={{ background: bg, color: intensity > 0.5 ? "#000" : "#fff" }}
+                      >
+                        {cell.value.toFixed(2)}
+                      </motion.div>
+                    );
+                  })}
+                </div>
+                <div className="flex gap-6 mt-6 text-xs text-zinc-500">
+                  <div className="flex items-center gap-2"><div className="w-3 h-3 rounded bg-white" /> Strong positive (1.0)</div>
+                  <div className="flex items-center gap-2"><div className="w-3 h-3 rounded bg-zinc-600" /> Weak/negative</div>
+                </div>
+              </div>
+            )}
+
+            {/* ── BACKTEST ── */}
+            {activeTab === "backtest" && (
+              <div className="space-y-5">
+                <div className="grid grid-cols-3 gap-3">
+                  {[
+                    { label: "Portfolio Return", value: backtest.total_return_portfolio, suffix: "%" },
+                    { label: "SPY Return", value: backtest.total_return_spy, suffix: "%" },
+                    { label: "Alpha", value: backtest.alpha, suffix: "%" },
+                  ].map((item) => (
+                    <motion.div key={item.label} whileHover={{ y: -2 }}
+                      className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5 text-center">
+                      <p className="text-xs text-zinc-500 uppercase tracking-widest mb-2">{item.label}</p>
+                      <p className={`text-3xl font-bold tabular-nums ${item.value >= 0 ? "text-white" : "text-zinc-500"}`}>
+                        {item.value >= 0 ? "+" : ""}<AnimatedNumber value={item.value} decimals={2} suffix={item.suffix} />
+                      </p>
+                    </motion.div>
+                  ))}
+                </div>
+
+                <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6">
+                  <h2 className="text-sm font-semibold mb-0.5">Historical Equity Curve (1 Year)</h2>
+                  <p className="text-xs text-zinc-500 mb-5">Portfolio vs SPY benchmark · starting $10,000</p>
+                  <div className="h-80">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <LineChart data={backtest.equity_curve}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#18181b" />
+                        <XAxis dataKey="date" stroke="#3f3f46" tick={{ fill: "#52525b", fontSize: 9 }}
+                          tickFormatter={(v) => v.slice(5)} />
+                        <YAxis stroke="#3f3f46" tick={{ fill: "#52525b", fontSize: 10 }}
+                          tickFormatter={(v) => `$${(v / 1000).toFixed(1)}k`} />
+                        <Tooltip content={({ active, payload, label }) =>
+                          active && payload?.length ? (
+                            <div className="bg-zinc-900 border border-zinc-700 rounded-xl px-4 py-3 text-xs space-y-1">
+                              <p className="text-zinc-500">{label}</p>
+                              {payload.map((p) => (
+                                <p key={p.name} style={{ color: p.color }} className="font-semibold">
+                                  {p.name}: ${Number(p.value).toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                                </p>
+                              ))}
+                            </div>
+                          ) : null
+                        } />
+                        <Line type="monotone" dataKey="portfolio" name="Portfolio" stroke="#ffffff" strokeWidth={2} dot={false} />
+                        <Line type="monotone" dataKey="spy" name="SPY" stroke="#52525b" strokeWidth={1.5} dot={false} strokeDasharray="4 4" />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+
+                <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6">
+                  <h2 className="text-sm font-semibold mb-0.5">Drawdown Analysis</h2>
+                  <p className="text-xs text-zinc-500 mb-5">Peak-to-trough decline over time</p>
+                  <div className="h-56">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <AreaChart data={backtest.drawdown_curve}>
+                        <defs>
+                          <linearGradient id="ddG" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stopColor="#71717a" stopOpacity={0.05} />
+                            <stop offset="100%" stopColor="#71717a" stopOpacity={0.3} />
+                          </linearGradient>
+                        </defs>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#18181b" />
+                        <XAxis dataKey="date" stroke="#3f3f46" tick={{ fill: "#52525b", fontSize: 9 }}
+                          tickFormatter={(v) => v.slice(5)} />
+                        <YAxis stroke="#3f3f46" tick={{ fill: "#52525b", fontSize: 10 }} tickFormatter={(v) => `${v}%`} />
+                        <Tooltip content={({ active, payload, label }) =>
+                          active && payload?.length ? (
+                            <div className="bg-zinc-900 border border-zinc-700 rounded-xl px-3 py-2 text-xs">
+                              <p className="text-zinc-500">{label}</p>
+                              <p className="text-zinc-300 font-semibold">{Number(payload[0]?.value).toFixed(2)}%</p>
+                            </div>
+                          ) : null
+                        } />
+                        <Area type="monotone" dataKey="drawdown" stroke="#71717a" fill="url(#ddG)" strokeWidth={1.5} />
+                      </AreaChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* ── STRESS TEST ── */}
+            {activeTab === "stress" && (
+              <div className="space-y-4">
+                <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5 mb-1">
+                  <h2 className="text-sm font-semibold">Stress Test Scenarios</h2>
+                  <p className="text-xs text-zinc-500 mt-0.5">Historical crisis simulations — 60-day portfolio impact</p>
+                </div>
+                {stress.map((scenario, i) => (
+                  <motion.div key={scenario.scenario}
+                    initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: i * 0.08 }}
+                    className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 hover:border-zinc-600 transition-colors">
+                    <div className="flex items-start justify-between mb-4">
+                      <div>
+                        <h3 className="text-sm font-semibold text-white">{scenario.scenario}</h3>
+                        <p className="text-xs text-zinc-500 mt-0.5">Simulated 60-day stressed path</p>
+                      </div>
+                      <div className="text-right">
+                        <p className={`text-2xl font-bold tabular-nums ${scenario.portfolio_impact >= 0 ? "text-white" : "text-zinc-400"}`}>
+                          {scenario.portfolio_impact >= 0 ? "+" : ""}{scenario.portfolio_impact}%
+                        </p>
+                        <p className="text-xs text-zinc-600 mt-1">Worst day: {scenario.worst_day}%</p>
+                      </div>
+                    </div>
+                    <div className="h-32">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <LineChart data={scenario.path.map((v, d) => ({ day: d, value: v }))}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#18181b" />
+                          <XAxis dataKey="day" stroke="#3f3f46" tick={{ fill: "#52525b", fontSize: 9 }} />
+                          <YAxis stroke="#3f3f46" tick={{ fill: "#52525b", fontSize: 9 }}
+                            tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`} />
+                          <Tooltip content={({ active, payload }) =>
+                            active && payload?.length ? (
+                              <div className="bg-zinc-900 border border-zinc-700 rounded-xl px-3 py-2 text-xs">
+                                <p className="text-white font-semibold">${Number(payload[0]?.value).toLocaleString(undefined, { maximumFractionDigits: 0 })}</p>
+                              </div>
+                            ) : null
+                          } />
+                          <Line type="monotone" dataKey="value" stroke={scenario.portfolio_impact >= 0 ? "#ffffff" : "#71717a"} strokeWidth={2} dot={false} />
+                        </LineChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </motion.div>
+                ))}
               </div>
             )}
 
