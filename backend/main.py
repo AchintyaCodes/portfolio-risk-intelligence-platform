@@ -19,27 +19,53 @@ app.add_middleware(
 def home():
     return {"message": "Portfolio Risk API running"}
 
-@app.get("/portfolio")
-def analyze_portfolio():
-    tickers = ["AAPL", "TSLA", "MSFT", "NVDA"]
+from fastapi import Query
 
-    data = yf.download(tickers, period="1y")["Close"]
+@app.get("/portfolio")
+def analyze_portfolio(
+    tickers: str = Query(...),
+    weights: str = Query(...)
+):
+    ticker_list = tickers.split(",")
+    weight_list = np.array(
+        [float(w) / 100 for w in weights.split(",")]
+    )
+
+    data = yf.download(
+        ticker_list,
+        period="1y",
+        auto_adjust=True
+    )["Close"]
 
     returns = data.pct_change().dropna()
 
     mean_returns = returns.mean() * 252
     cov_matrix = returns.cov() * 252
 
-    weights = np.array([0.35, 0.25, 0.20, 0.20])
-
-    portfolio_return = np.sum(mean_returns * weights)
-    portfolio_volatility = np.sqrt(
-        np.dot(weights.T, np.dot(cov_matrix, weights))
+    portfolio_return = float(
+        np.sum(mean_returns * weight_list)
     )
 
-    sharpe_ratio = portfolio_return / portfolio_volatility
+    portfolio_volatility = float(
+        np.sqrt(
+            np.dot(
+                weight_list.T,
+                np.dot(cov_matrix, weight_list)
+            )
+        )
+    )
 
-    var_95 = np.percentile(returns.dot(weights), 5)
+    sharpe_ratio = (
+        portfolio_return / portfolio_volatility
+        if portfolio_volatility != 0
+        else 0
+    )
+
+    portfolio_daily_returns = returns.dot(weight_list)
+
+    var_95 = float(
+        np.percentile(portfolio_daily_returns, 5)
+    )
 
     return {
         "expected_return": round(portfolio_return * 100, 2),

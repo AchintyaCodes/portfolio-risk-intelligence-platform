@@ -1,5 +1,7 @@
 "use client";
 
+import { useEffect, useState } from "react";
+import axios from "axios";
 import {
   LineChart,
   Line,
@@ -31,6 +33,36 @@ const allocationData = [
 const COLORS = ["#ffffff", "#8884d8", "#82ca9d", "#ffc658"];
 
 export default function Dashboard() {
+  const [portfolioMetrics, setPortfolioMetrics] = useState({
+    expected_return: 0,
+    volatility: 0,
+    sharpe_ratio: 0,
+    value_at_risk: 0,
+  });
+
+  const [tickers, setTickers] = useState("AAPL,TSLA,MSFT,NVDA");
+  const [weights, setWeights] = useState("35,25,20,20");
+
+  const fetchPortfolioData = () => {
+    axios
+      .get("http://127.0.0.1:8000/portfolio", {
+        params: {
+          tickers,
+          weights,
+        },
+      })
+      .then((response) => {
+        setPortfolioMetrics(response.data);
+      })
+      .catch((error) => {
+        console.error("Error fetching portfolio data:", error);
+      });
+  };
+
+  useEffect(() => {
+    fetchPortfolioData();
+  }, []);
+
   return (
     <main className="min-h-screen bg-gradient-to-b from-black via-zinc-950 to-black text-white px-8 py-10">
       {/* Header */}
@@ -54,18 +86,25 @@ export default function Dashboard() {
         <div className="grid md:grid-cols-3 gap-4">
           <input
             type="text"
-            placeholder="Ticker (e.g. AAPL)"
+            value={tickers}
+            onChange={(e) => setTickers(e.target.value)}
+            placeholder="Tickers (e.g. AAPL,TSLA,MSFT)"
             className="p-4 rounded-2xl bg-black border border-white/10 focus:outline-none focus:border-white/30"
           />
 
           <input
-            type="number"
-            placeholder="Weight %"
+            type="text"
+            value={weights}
+            onChange={(e) => setWeights(e.target.value)}
+            placeholder="Weights (e.g. 40,30,30)"
             className="p-4 rounded-2xl bg-black border border-white/10 focus:outline-none focus:border-white/30"
           />
 
-          <button className="rounded-2xl bg-white text-black font-semibold hover:scale-105 transition duration-300 shadow-lg">
-            Add Asset
+          <button
+            onClick={fetchPortfolioData}
+            className="rounded-2xl bg-white text-black font-semibold hover:scale-105 transition duration-300 shadow-lg"
+          >
+            Analyze Portfolio
           </button>
         </div>
       </section>
@@ -74,22 +113,30 @@ export default function Dashboard() {
       <section className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-12">
         <div className="p-6 rounded-3xl bg-white/5 border border-white/10 backdrop-blur-lg">
           <h3 className="text-gray-400">Expected Return</h3>
-          <p className="text-4xl font-bold mt-3">18.4%</p>
+          <p className="text-4xl font-bold mt-3">
+            {portfolioMetrics.expected_return}%
+          </p>
         </div>
 
         <div className="p-6 rounded-3xl bg-white/5 border border-white/10 backdrop-blur-lg">
           <h3 className="text-gray-400">Volatility</h3>
-          <p className="text-4xl font-bold mt-3">9.2%</p>
+          <p className="text-4xl font-bold mt-3">
+            {portfolioMetrics.volatility}%
+          </p>
         </div>
 
         <div className="p-6 rounded-3xl bg-white/5 border border-white/10 backdrop-blur-lg">
           <h3 className="text-gray-400">Sharpe Ratio</h3>
-          <p className="text-4xl font-bold mt-3">2.31</p>
+          <p className="text-4xl font-bold mt-3">
+            {portfolioMetrics.sharpe_ratio}
+          </p>
         </div>
 
         <div className="p-6 rounded-3xl bg-white/5 border border-white/10 backdrop-blur-lg">
           <h3 className="text-gray-400">Value at Risk</h3>
-          <p className="text-4xl font-bold mt-3">-4.7%</p>
+          <p className="text-4xl font-bold mt-3">
+            {portfolioMetrics.value_at_risk}%
+          </p>
         </div>
       </section>
 
