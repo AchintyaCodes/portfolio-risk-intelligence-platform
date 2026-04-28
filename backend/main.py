@@ -66,12 +66,15 @@ def analyze_portfolio(
     max_drawdown = float(drawdown.min())
 
     # Beta vs SPY
-    spy_data = yf.download("SPY", period="1y", auto_adjust=True, progress=False)
-    spy_returns = spy_data["Close"].pct_change().dropna()
-    aligned = pd.concat([portfolio_daily_returns, spy_returns], axis=1).dropna()
-    aligned.columns = ["portfolio", "spy"]
-    cov_with_spy = np.cov(aligned["portfolio"], aligned["spy"])
-    beta = float(cov_with_spy[0, 1] / cov_with_spy[1, 1]) if cov_with_spy[1, 1] != 0 else 1.0
+    try:
+        spy_data = yf.download("SPY", period="1y", auto_adjust=True, progress=False)
+        spy_returns = spy_data["Close"].pct_change().dropna()
+        aligned = pd.concat([portfolio_daily_returns, spy_returns], axis=1).dropna()
+        aligned.columns = ["portfolio", "spy"]
+        cov_with_spy = np.cov(aligned["portfolio"], aligned["spy"])
+        beta = float(cov_with_spy[0, 1] / cov_with_spy[1, 1]) if cov_with_spy[1, 1] != 0 else 1.0
+    except Exception:
+        beta = 1.0  # Default to market beta if SPY fetch fails
 
     # Individual stock metrics
     individual = []
@@ -261,13 +264,17 @@ def ai_insights(
     insights.append(f"Daily 95% VaR of {var_95*100:.2f}% implies that on the worst 5% of trading days, losses could exceed this threshold on a $1M portfolio (≈${abs(var_95)*1_000_000:,.0f}).")
 
     # Return vs benchmark
-    spy_data = yf.download("SPY", period="1y", auto_adjust=True, progress=False)
-    spy_annual = float(spy_data["Close"].pct_change().dropna().mean() * 252)
-    alpha = portfolio_return - spy_annual
-    if alpha > 0:
-        insights.append(f"Portfolio is generating {alpha*100:.2f}% alpha over SPY ({spy_annual*100:.1f}% annualized). Outperforming the benchmark.")
-    else:
-        insights.append(f"Portfolio is underperforming SPY by {abs(alpha)*100:.2f}%. Consider reviewing sector exposure and factor tilts.")
+    try:
+        spy_data = yf.download("SPY", period="1y", auto_adjust=True, progress=False)
+        spy_annual = float(spy_data["Close"].pct_change().dropna().mean() * 252)
+        alpha = portfolio_return - spy_annual
+        if alpha > 0:
+            insights.append(f"Portfolio is generating {alpha*100:.2f}% alpha over SPY ({spy_annual*100:.1f}% annualized). Outperforming the benchmark.")
+        else:
+            insights.append(f"Portfolio is underperforming SPY by {abs(alpha)*100:.2f}%. Consider reviewing sector exposure and factor tilts.")
+    except Exception:
+        # If SPY fetch fails, skip alpha calculation
+        pass
 
     return {"insights": insights}
 

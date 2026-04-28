@@ -10,7 +10,7 @@ import {
 } from "recharts";
 import { TrendingUp, TrendingDown, Activity, Shield, Zap, Target, BarChart2, RefreshCw, Wifi, WifiOff, GitBranch, Clock, AlertTriangle } from "lucide-react";
 
-const API = "http://127.0.0.1:8000";
+const API = "https://portfolio-risk-intelligence-platform-production.up.railway.app";
 
 // ── Monochrome palette: white → zinc shades only ──────────────────
 const SLICE_COLORS = ["#ffffff", "#a1a1aa", "#71717a", "#52525b"];
