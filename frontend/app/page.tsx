@@ -1,6 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
+import Link from "next/link"; 
 
 export default function Home() {
   return (
@@ -16,9 +17,11 @@ export default function Home() {
             Learn More
           </button>
 
+        <Link href="/dashboard">
           <button className="px-5 py-2 rounded-full bg-white text-black font-semibold hover:scale-105 transition duration-300">
             Get Started
           </button>
+        </Link>
         </div>
       </nav>
 
@@ -41,9 +44,11 @@ export default function Home() {
         </p>
 
         <div className="mt-12 flex flex-wrap justify-center gap-4">
+        <Link href="/dashboard">
           <button className="px-8 py-4 rounded-full bg-white text-black font-semibold hover:scale-105 transition duration-300 shadow-lg">
             Launch Dashboard
           </button>
+        </Link>
 
           <button className="px-8 py-4 rounded-full border border-white/20 hover:bg-white hover:text-black transition duration-300">
             Explore Features
