@@ -431,7 +431,7 @@ def calculate_risk_metrics(returns, confidence_level=0.05):
 
 ## 🤝 **Contributing**
 
-We welcome contributions! Please see our [Contributing Guidelines](CONTRIBUTING.md) for details.
+
 
 ### 🔄 **Development Workflow**
 1. Fork the repository
