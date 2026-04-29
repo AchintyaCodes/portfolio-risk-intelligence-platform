@@ -26,7 +26,7 @@
 
 A **full-stack quantitative finance platform** engineered for institutional-grade portfolio risk management. Built with modern web technologies and advanced financial mathematics, this system processes live market data through **8 sophisticated analytical models** including Monte Carlo simulation, Markowitz optimization, and multi-scenario stress testing.
 
-> **🏆 Built for Goldman Sachs • JPMC • Morgan Stanley • McKinsey level interviews**
+
 
 <div align="center">
 
